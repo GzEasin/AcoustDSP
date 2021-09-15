@@ -1,6 +1,6 @@
 # Acoustic DSP
 
-Acoustic DSP is a Python library which aims to implement several digital signal processing algorithms regarding acoustics in one place. The library consists of the following modules:
+Acoustic DSP is a Python library which aims to implement several digital signal processing algorithms regarding acoustic analysis in one place. The library consists of the following modules:
 
 1. Acoustics
 2. Localization
