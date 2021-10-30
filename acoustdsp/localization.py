@@ -127,12 +127,18 @@ def cc_gaussian_interp(R: np.ndarray, tau: float, fs: int = 1):
         Improved time delay estimation in seconds.
     """
     R = np.atleast_2d(R)
-    max_indices = np.argmax(np.abs(R), axis=0)
+    max_indices = np.argmax(R, axis=0)
+
+    # If the maximum R value is at the end of a window,
+    # Gaussian interpolation is not possible.
+    if (max_indices == R.shape[0] - 1).any():
+        return tau
 
     # Retrieve the values around the maximum of R. R needs to be positive for
     # indices around the maximum value. If this is not the case, take the
     # absolute value of the point (impacts fitting).
-    y = np.array([R[idx - 1: idx + 2, i] for i, idx in enumerate(max_indices)])
+    y = np.array([[R[val - 1, idx], R[val, idx], R[val + 1, idx]]
+                  for idx, val in enumerate(max_indices)])
 
     if (y < 0).any():
         warnings.warn("Gaussian interpolation encountered negative R values. "
@@ -209,8 +215,8 @@ def cc_sinc_interp(R: np.ndarray, tau: float, interp_mul: int, fs: int,
     return (minima - n_margin_res) / fs_res + tau
 
 
-def calculate_tdoa(rirs: np.ndarray, mic_array: np.ndarray, fs: int = 1,
-                   c: float = 343, weighting: str = "direct",
+def calculate_tdoa(rirs: np.ndarray, mic_pairs: np.ndarray, max_td: int,
+                   fs: int = 1, weighting: str = "direct",
                    interp: str = "None"):
     """
     Calculate the Time Difference of Arrival using the
@@ -229,8 +235,13 @@ def calculate_tdoa(rirs: np.ndarray, mic_array: np.ndarray, fs: int = 1,
     fs: int, optional
         Signal sampling rate in Hz, specified as a real-valued scalar.
         Defaults to 1.
-    c: float, optional
-        Speed of sound in meters per second. Defaults to 343 m/s.
+    max_td: int
+        The maximum time in samples for a wavefront to propagate through
+        the given microphone array configuration.
+    mic_pairs: np.ndarray
+        A list containing all possible microphone pairs P in a given
+        microphone-array setup. For M microphones, there are P * (P - 1) / 2
+        unique pairs.
     weighting: str, optional
         Define the weighting function for the generalized
         cross-correlation. Defaults to 'direct' weighting.
@@ -244,10 +255,6 @@ def calculate_tdoa(rirs: np.ndarray, mic_array: np.ndarray, fs: int = 1,
         Time Difference of Arrival between all microphone pairs. The
         number of microphone pairs is: num_mics * (num_mics - 1) / 2
     """
-    if (rirs.shape[1] != mic_array.shape[0]):
-        raise ValueError("First dimension of rirs and mic_array needs to be "
-                         "equal.")
-
     if (weighting.lower() not in ["direct", "phat"]):
         raise ValueError("This function currently only supports Direct and "
                          "PHAT weighting.")
@@ -255,32 +262,25 @@ def calculate_tdoa(rirs: np.ndarray, mic_array: np.ndarray, fs: int = 1,
     if (interp.lower() not in ["none", "parabolic", "gaussian"]):
         raise ValueError("This function currently only supports Parabolic and "
                          "Gaussian interpolation.")
-    # All possible microphone pairs P
-    mic_pairs = np.array(list(itertools.combinations(range(mic_array.shape[0]),
-                                                     2)))
-    # Get the maximum time-delay in samples for the input microphone array.
-    max_td, _ = _mic_array_properties(mic_array, fs, c)
 
     offset = rirs.shape[0]
     tdoa_region = offset + np.arange(-max_td, max_td + 1)
 
     # Estimate the time difference of arrival using GCC
     r = gcc(rirs[:, mic_pairs[:, 0]], rirs[:, mic_pairs[:, 1]])
-
-    max_idices = np.argmax(np.abs(r[tdoa_region, :]), axis=0)
+    max_idices = np.argmax(r[tdoa_region, :], axis=0)
     tau_hat = (max_idices - max_td) / fs
 
     # Perform interpolation method
     if interp.lower() == "parabolic":
-        tau_hat = cc_parabolic_interp(r, tau_hat, fs)
+        tau_hat = cc_parabolic_interp(r[tdoa_region, :], tau_hat, fs)
     elif interp.lower() == "gaussian":
-        tau_hat = cc_gaussian_interp(r, tau_hat, fs)
+        tau_hat = cc_gaussian_interp(r[tdoa_region, :], tau_hat, fs)
     # Return estimated TDOA
     return tau_hat
 
 
-def calculate_doa(tau_hat: np.ndarray, mic_array: np.ndarray, fs: int = 1,
-                  c: float = 343):
+def calculate_doa(tau_hat: np.ndarray, V: np.ndarray):
     """
     Calculate the DOA from the slowness vector obtained with the
     Cross-Correlation method.
@@ -290,28 +290,22 @@ def calculate_doa(tau_hat: np.ndarray, mic_array: np.ndarray, fs: int = 1,
     tau_hat: np.ndarray
         Estimated Time Difference of Arrival between all microphone pairs.
         The number of microphone pairs is: num_mics * (num_mics - 1) / 2.
-    mic_array: np.ndarray
-        Microphone array carthesian coordinates (M x D), where M is
-        the number of microphones and D is the number of dimensions.
-    fs: int, optional
-        Signal sampling rate in Hz, specified as a real-valued scalar.
-        Defaults to 1.
-    c: float, optional
-        Speed of sound in meters per second. Defaults to 343 m/s.
+    V: np.ndarray
+        The sensor vector matrix in 3D space. V is an (P x D)
+        matrix, with P number of microphone pairs and D physical
+        dimensions.
     Returns
     -------
     doa: np.ndarray of floats
         Estimated Direction of Arrival in Carthesian coordinates (1xD)
     """
-    # Get the sensor vector matrix of the mic_array
-    _, V = _mic_array_properties(mic_array, fs, c)
     # Calculate slowness vector k
     k_hat = np.inner(np.linalg.pinv(V), tau_hat)
     # Calculate and return direction of arrival
-    return k_hat if np.sum(k_hat) == 0 else -k_hat / np.linalg.norm(k_hat, 2)
+    return -k_hat / np.linalg.norm(k_hat, 2, axis=0)
 
 
-def _mic_array_properties(mic_array: np.ndarray, fs: int = 1, c: float = 343.):
+def get_propagation_time(mic_array: np.ndarray, fs: int = 1, c: float = 343.):
     """
     Calculates the maximum time it takes for a wavefront to propagate
     through a given microphone array. The input of `mic_array` is a
