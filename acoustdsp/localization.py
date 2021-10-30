@@ -66,7 +66,8 @@ def gcc(sig: np.ndarray, refsig: np.ndarray,
     return R
 
 
-def cc_parabolic_interp(R: np.ndarray, tau: float, fs: int = 1):
+def cc_parabolic_interp(R: np.ndarray, tdoa_region: np.ndarray, tau: float,
+                        fs: int = 1):
     """
     Fit a parabolic function of the form: `ax^2 + bx + c` to the maximum
     value of a Cross-Correlation function. Returns the x-position of the
@@ -89,7 +90,7 @@ def cc_parabolic_interp(R: np.ndarray, tau: float, fs: int = 1):
         Improved time delay estimation in seconds.
     """
     R = np.atleast_2d(R)
-    max_indices = np.argmax(np.abs(R), axis=0)
+    max_indices = np.argmax(R[tdoa_region, :], axis=0) + tdoa_region[0]
 
     # Retrieve the values around the maximum of R
     y = np.array([R[idx - 1: idx + 2, i] for i, idx in enumerate(max_indices)])
@@ -104,7 +105,8 @@ def cc_parabolic_interp(R: np.ndarray, tau: float, fs: int = 1):
     return tau + (vertices - 1) / fs
 
 
-def cc_gaussian_interp(R: np.ndarray, tau: float, fs: int = 1):
+def cc_gaussian_interp(R: np.ndarray, tdoa_region: np.ndarray, tau: float,
+                       fs: int = 1):
     """
     Fit a gaussian function of the form: `a * exp(-b(x - c)^2)` to the
     maximum value of a Cross-Correlation function. Returns the x-position
@@ -127,12 +129,7 @@ def cc_gaussian_interp(R: np.ndarray, tau: float, fs: int = 1):
         Improved time delay estimation in seconds.
     """
     R = np.atleast_2d(R)
-    max_indices = np.argmax(R, axis=0)
-
-    # If the maximum R value is at the end of a window,
-    # Gaussian interpolation is not possible.
-    if (max_indices == R.shape[0] - 1).any():
-        return tau
+    max_indices = np.argmax(R[tdoa_region, :], axis=0) + tdoa_region[0]
 
     # Retrieve the values around the maximum of R. R needs to be positive for
     # indices around the maximum value. If this is not the case, take the
@@ -273,9 +270,9 @@ def calculate_tdoa(rirs: np.ndarray, mic_pairs: np.ndarray, max_td: int,
 
     # Perform interpolation method
     if interp.lower() == "parabolic":
-        tau_hat = cc_parabolic_interp(r[tdoa_region, :], tau_hat, fs)
+        tau_hat = cc_parabolic_interp(r, tdoa_region, tau_hat, fs)
     elif interp.lower() == "gaussian":
-        tau_hat = cc_gaussian_interp(r[tdoa_region, :], tau_hat, fs)
+        tau_hat = cc_gaussian_interp(r, tdoa_region, tau_hat, fs)
     # Return estimated TDOA
     return tau_hat
 
@@ -302,7 +299,8 @@ def calculate_doa(tau_hat: np.ndarray, V: np.ndarray):
     # Calculate slowness vector k
     k_hat = np.inner(np.linalg.pinv(V), tau_hat)
     # Calculate and return direction of arrival
-    return -k_hat / np.linalg.norm(k_hat, 2, axis=0)
+    return k_hat if np.sum(k_hat) == 0 else -k_hat / np.linalg.norm(k_hat, 2,
+                                                                    axis=0)
 
 
 def get_propagation_time(mic_array: np.ndarray, fs: int = 1, c: float = 343.):
