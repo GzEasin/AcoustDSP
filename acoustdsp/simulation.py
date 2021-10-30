@@ -89,7 +89,7 @@ def lagrange_fd_filter_truncated(delay: np.ndarray, N: int, K: int):
 
 
 def simulate_direct_sound(distance: np.ndarray, fs: int, N: int = 20,
-                          K: int = 0, c: float = 343):
+                          K: int = 0, c: float = 343, ir_length: int = None):
     """
         Simulate the ideal direct sound propagation measured by a microphone at
         a given distance from a sound source.
@@ -106,16 +106,22 @@ def simulate_direct_sound(distance: np.ndarray, fs: int, N: int = 20,
     K: int
         Number of coefficients of the Lagrange fractional delay filter that
         are set to zero at each end of the Lagrange prototype filter.
+    ir_length: int, optional
+        Define the length of the output signals in samples.
     Returns
     -------
     signals: np.ndarray
-        Return M signals of length `(distance / c + 1) * fs` which represent
-        the direct sound propagation between a sound source and a microphone.
+        Return M signals of length `ir_length` || `(distance / c + 1) * fs`,
+        which represent the direct sound propagation between a sound source
+        and a microphone.
     """
     num_signals = distance.shape[0]
 
-    signals = np.array([np.zeros(np.round(distance[i] / c + 1).astype(int)
-                                 * fs) for i in range(num_signals)])
+    if ir_length:
+        signals = np.zeros((ir_length, num_signals))
+    else:
+        signals = np.array([np.zeros(np.round(distance[i] / c + 1).astype(int)
+                                     * fs) for i in range(num_signals)])
 
     for i in range(num_signals):
         # Add one second to the total duration

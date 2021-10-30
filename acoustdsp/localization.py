@@ -78,6 +78,9 @@ def cc_parabolic_interp(R: np.ndarray, tdoa_region: np.ndarray, tau: float,
     R: np.ndarray
         Input cross-correlation signal. R has a size of (2N-1) x S. Where
         S is the number of cross-correlations.
+    tdoa_region: np.ndarray
+        The region where the TDOA estimate is bounded to. This variable
+        consists of a range of valid TDOA estimate indices.
     tau: float
         Estimated time delay value in seconds which maximizes the
         cross-correlation function `R`.
@@ -117,6 +120,9 @@ def cc_gaussian_interp(R: np.ndarray, tdoa_region: np.ndarray, tau: float,
     R: np.ndarray
         Input cross-correlation signal. R has a size of (2N-1) x S. Where
         S is the number of cross-correlations.
+    tdoa_region: np.ndarray
+        The region where the TDOA estimate is bounded to. This variable
+        consists of a range of valid TDOA estimate indices.
     tau: float
         Estimated time delay value in seconds which maximizes the
         cross-correlation function `R`.
