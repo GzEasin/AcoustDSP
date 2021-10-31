@@ -118,7 +118,7 @@ def simulate_direct_sound(distance: np.ndarray, fs: int, N: int = 20,
     num_signals = distance.shape[0]
 
     if ir_length:
-        signals = np.zeros((ir_length, num_signals))
+        signals = np.zeros((num_signals, ir_length))
     else:
         signals = np.array([np.zeros(np.round(distance[i] / c + 1).astype(int)
                                      * fs) for i in range(num_signals)])
@@ -129,6 +129,11 @@ def simulate_direct_sound(distance: np.ndarray, fs: int, N: int = 20,
         # Get integer and fractional part of the delay in samples
         i_delay = int(delay // 1)
         f_delay = delay - i_delay
+
+        if (i_delay + 1 > signals.shape[1]):
+            raise IndexError("Requested delay is higher than the "
+                             "input length.")
+
         # Dirac delta function at integer delay point
         signals[i][i_delay] = 1
         # Filter dirac delta function with a fractional delay FIR filter
