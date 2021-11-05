@@ -78,12 +78,11 @@ def spatial_decomposition_method(rirs: np.ndarray, ref_rir: np.ndarray,
     mic_pairs = np.array(list(itertools.combinations(range(mic_array.shape[0]),
                                                      2)))
 
-    distances = (np.arange(1, num_frames + 1) + win_size // 2) / fs * c
-
     threshold = (direct_sound_amplitude ** 2) * (10 ** (-abs(threshold_db)
                                                         / 10))
 
-    tdoas = np.zeros((num_frames, mic_pairs.shape[0]))
+    doas = np.full((ref_rir.shape[0], 3), np.nan)
+
     for idx, frame in enumerate(frames):
         offset = frame.shape[0]
         tdoa_region = offset + np.arange(-max_td, max_td + 1)
@@ -94,12 +93,12 @@ def spatial_decomposition_method(rirs: np.ndarray, ref_rir: np.ndarray,
 
         # Make sure the correlations are sufficiently high w.r.t. the signal
         # amplitude. If too low, TDOA estimation be inaccurate.
+        tdoas = np.zeros((1, mic_pairs.shape[0]))
         if (r[max_idices + offset, range(r.shape[1])] > threshold).all():
             tau_hat = max_idices / fs
-            tdoas[idx] = loc.cc_gaussian_interp(r, tdoa_region, tau_hat, fs)
+            tdoas = loc.cc_gaussian_interp(r, tdoa_region, tau_hat, fs)
 
-    doas = np.full((ref_rir.shape[0], 3), np.nan)
-    doas[win_size // 2:num_frames + (win_size // 2), :] = (
-                                        distances * loc.calculate_doa(tdoas, V)
-                                        ).T
+        distance = (idx + win_size // 2) / fs * c
+        doas[idx + win_size // 2, :] = distance * loc.calculate_doa(tdoas, V).T
+
     return doas
