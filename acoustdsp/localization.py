@@ -292,7 +292,8 @@ def calculate_doa(tau_hat: np.ndarray, V: np.ndarray):
     ----------
     tau_hat: np.ndarray
         Estimated Time Difference of Arrival between all microphone pairs.
-        The number of microphone pairs is: num_mics * (num_mics - 1) / 2.
+        The number of microphone pairs is: P = num_mics * (num_mics - 1) / 2.
+        This vector has length (Px1)
     V: np.ndarray
         The sensor vector matrix in 3D space. V is an (P x D)
         matrix, with P number of microphone pairs and D physical
@@ -300,13 +301,14 @@ def calculate_doa(tau_hat: np.ndarray, V: np.ndarray):
     Returns
     -------
     doa: np.ndarray of floats
-        Estimated Direction of Arrival in Carthesian coordinates (1xD)
+        Estimated Direction of Arrival in Carthesian coordinates (Dx1)
     """
     # Calculate slowness vector k
     k_hat = np.inner(np.linalg.pinv(V), tau_hat)
     # Calculate and return direction of arrival
-    return k_hat if np.sum(k_hat) == 0 else -k_hat / np.linalg.norm(k_hat, 2,
-                                                                    axis=0)
+    return k_hat if np.sum(k_hat, axis=0) == 0 else (-k_hat
+                                                     / np.linalg.norm(k_hat, 2,
+                                                                      axis=0))
 
 
 def get_propagation_time(mic_array: np.ndarray, fs: int = 1, c: float = 343.):
